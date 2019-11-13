@@ -13,7 +13,7 @@ const VERSIONS = ['2.0.5', '2.0.6', '2.0.7', '2.0.8', '2.0.9', '2.0.10', '2.1.0'
 const GA_VERSION_REX = /^v?[0-9.]*(?:-p.[0-9]+)?$/;
 
 async function handlerSeparateEngine (opts, cb) {
-  if (opts.platform !== 'wechatgame') {
+  if (opts.platform !== 'wechatgame' && (opts.actualPlatform && opts.actualPlatform !== 'wechatgame')) {
     return cb();
   }
   try {
