@@ -7,10 +7,13 @@ const { promisify } = require('util');
 const Globby = require('globby');
 const Dialog = require('electron').dialog;
 
+// 该插件目前支持的 Cocos Creator 编辑器版本
 const VERSIONS = ['2.0.5', '2.0.6', '2.0.7', '2.0.8', '2.0.9', '2.0.10', '2.1.0', '2.1.1', '2.1.2', '2.1.3', '2.1.4', '2.2.0'];
 
-let Plugin_Version = [];
-Plugin_Version['2.1.3'] = '2.2.1';
+// 由于某些版本的插件有兼容性问题需要进行特殊处理
+let Plugin_Version = {
+    '2.1.3': '2.2.1',
+};
 
 // 判断是否为正式版本正则表达式
 const GA_VERSION_REX = /^v?[0-9.]*(?:-p.[0-9]+)?$/;
@@ -20,28 +23,6 @@ async function handlerSeparateEngine (opts, cb) {
     return cb();
   }
   try {
-    if (VERSIONS.indexOf(Editor.versions.CocosCreator) === -1) {
-      Dialog.showErrorBox('构建警告', `微信小游戏引擎兼容插件只适用 Cocos Creator 版本: ${VERSIONS.join('|')}`);
-      return cb();
-    }
-
-    let localSettings = Editor.Profile.load('profile://local/settings.json');
-    let globalSettings = Editor.Profile.load('profile://global/settings.json');
-    let useDefaultEngine = globalSettings.data['use-default-js-engine'];
-    if (localSettings.data['use-global-engine-setting'] === false) {
-        useDefaultEngine = (localSettings.data['use-default-js-engine'] === true);
-    }
-    let cocos2dVersion = Editor.versions['CocosCreator'];
-    if (!useDefaultEngine || !GA_VERSION_REX.test(cocos2dVersion)) {
-        Dialog.showErrorBox('构建警告', `引擎插件功能仅支持 Cocos Creator 正式版本并且使用内置引擎`);
-        return cb();
-    }
-
-    if (!!opts.debug) {
-      Dialog.showErrorBox('构建警告', `微信小游戏引擎插件不适用调试模式`);
-      return cb();
-    }
-
     Editor.info('启动适配微信小游戏引擎插件');
 
     // 调整 cocos2d-js-min.js 的文件存放结构用于满足微信小游戏引擎插件的功能
@@ -130,12 +111,50 @@ async function handlerSeparateEngine (opts, cb) {
   cb();
 }
 
+function checkPlugin (opts, cb) {
+    if (opts.platform !== 'wechatgame' && (opts.actualPlatform && opts.actualPlatform !== 'wechatgame')) {
+        return cb();
+    }
+    try {
+        let error = '';
+        if (VERSIONS.indexOf(Editor.versions.CocosCreator) === -1) {
+            error = `微信小游戏引擎兼容插件只适用 Cocos Creator 版本: ${VERSIONS.join('|')}`;
+            Dialog.showErrorBox('构建警告', error);
+            return cb(new Error(error));
+        }
+
+        let localSettings = Editor.Profile.load('profile://local/settings.json');
+        let globalSettings = Editor.Profile.load('profile://global/settings.json');
+        let useDefaultEngine = globalSettings.data['use-default-js-engine'];
+        if (localSettings.data['use-global-engine-setting'] === false) {
+            useDefaultEngine = (localSettings.data['use-default-js-engine'] === true);
+        }
+        let cocos2dVersion = Editor.versions['CocosCreator'];
+        if (!useDefaultEngine || !GA_VERSION_REX.test(cocos2dVersion)) {
+            error = `引擎插件功能仅支持 Cocos Creator 正式版本并且使用内置引擎`;
+            Dialog.showErrorBox('构建警告', error);
+            return cb(new Error(error));
+        }
+
+        if (!!opts.debug) {
+            error = `微信小游戏引擎插件不适用调试模式`;
+            Dialog.showErrorBox('构建警告', error);
+            return cb(new Error(error));
+        }
+    } catch (e) {
+        Editor.log(e);
+    }
+    cb();
+}
+
 module.exports = {
   load () {
+    Editor.Builder.on('build-start', checkPlugin);
     Editor.Builder.on('build-finished', handlerSeparateEngine);
   },
 
   unload () {
+    Editor.Builder.removeListener('build-start', checkPlugin);
     Editor.Builder.removeListener('build-finished', handlerSeparateEngine);
   },
 };
